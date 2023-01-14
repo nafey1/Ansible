@@ -1,0 +1,32 @@
+---
+- hosts: all
+  gather_facts: false
+  remote_user: ansadm
+  become: true
+  become_user: root
+  tasks:
+
+- ansible.builtin.import_playbook: swap.yaml
+
+- ansible.builtin.import_playbook: modprobe.yaml
+
+- ansible.builtin.import_playbook: containerd.yaml
+
+- ansible.builtin.import_playbook: selinux.yaml
+
+- ansible.builtin.import_playbook: kubernetes.yaml
+  vars:
+     VERSION: "{{ version }}"
+
+- ansible.builtin.import_playbook: controlplane.yaml
+  vars:
+     PodCIDR: 10.244.0.0/16
+     APIaddress: 192.168.1.101
+
+- ansible.builtin.import_playbook: join.yaml
+
+- ansible.builtin.import_playbook: addons.yaml
+
+
+
+### Execute the playbook like this: ansible-playbook -l kubernetes -e version=1.23.1 ~/Documents/Kubernetes/Install/main.yaml

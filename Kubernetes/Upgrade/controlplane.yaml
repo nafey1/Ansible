@@ -1,0 +1,81 @@
+---
+
+- hosts: masters
+  gather_facts: true
+  become: true
+  become_user: root
+
+  tasks:
+
+    - name: Upgrade Kubeadm package
+      vars:
+       version:
+      yum:
+        name: "{{ item }}"
+        state: latest
+        disable_excludes: kubernetes
+      loop:
+        - kubeadm-{{ VERSION }}
+
+
+    - name: Verify the upgrade plan
+      become: true
+      become_user: root
+      shell:
+        cmd: kubeadm upgrade plan
+      register: upgrade_plan
+
+    - name: View the upgrade plan
+      debug:
+        msg: "{{ upgrade_plan.stdout }}"
+
+
+    - name: Upgrade the Kubeadm
+      become: true
+      become_user: root
+      shell:
+        cmd:  echo "Y" | kubeadm upgrade apply v{{ VERSION }}
+      register: upgrade_output
+
+
+    - name: Verify the upgrade plan
+      debug:
+        msg: "{{ upgrade_output.stdout }}"
+
+
+    - name: Cordon the Controlplane
+      become: true
+      become_user: root
+      environment:
+         KUBECONFIG: /etc/kubernetes/admin.conf
+      shell:
+        cmd:  kubectl drain {{ ansible_fqdn }} --ignore-daemonsets
+
+
+    - name: Upgrade kubelet and kubectl
+      vars:
+       version:
+      yum:
+        name: "{{ item }}"
+        state: latest
+        disable_excludes: kubernetes
+      loop:
+        - kubectl-{{ VERSION }}
+        - kubelet-{{ VERSION }}
+
+    - name: Restart the kubelet
+      systemd:
+         state: restarted
+         daemon_reload: yes
+         name: kubelet
+
+    - name: Uncordon the Controlplane
+      become: true
+      become_user: root
+      environment:
+         KUBECONFIG: /etc/kubernetes/admin.conf
+      shell:
+        cmd:  kubectl uncordon "{{ ansible_fqdn }}" 
+
+
+

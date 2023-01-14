@@ -1,0 +1,11 @@
+---
+- hosts: all
+  become: true
+  become_user: root
+  gather_facts: false
+  tasks:
+
+  - name: Add Suoders file to he target hosts
+    copy:
+        src: /home/ansadm/Documents/Configs/100-ansadm-sudoer
+        dest: /etc/sudoers.d/100-ansadm-sudoer

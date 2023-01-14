@@ -1,0 +1,20 @@
+---
+- hosts: all
+  become: true
+  tasks:
+ 
+   - name: Add Elasticsearch Repository
+     copy:
+        src: /home/ansadm/Documents/Configs/elasticsearch.repo
+        dest: /etc/yum.repos.d/
+
+
+   - name: Install Elasticsearch & elasticsearch_exporter
+     yum:
+       name: 
+         - elasticsearch 
+         - elasticsearch_exporter
+         - heartbeat-elastic
+         - metricbeat
+         - filebeat
+       state: latest

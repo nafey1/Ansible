@@ -1,0 +1,15 @@
+---
+
+- hosts: all
+  gather_facts: false
+  become: true
+  become_user: root
+
+  tasks:
+    - name: Set SELinux in permissive mode (effectively disabling it)
+      shell:
+        cmd: "{{ item }}"
+      loop:
+        - setenforce 0
+        - sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config
+    

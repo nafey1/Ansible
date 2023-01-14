@@ -1,0 +1,14 @@
+---
+
+- hosts: all
+  gather_facts: false
+  become: true
+  become_user: root
+
+  tasks:
+    - name: Disable SWAP on the kubernetes nodes
+      shell:
+        cmd:  "{{ item }}"
+      loop:
+        - swapoff -a
+        - sed -e '/swap/s/^/#/g' -i /etc/fstab

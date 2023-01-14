@@ -1,0 +1,25 @@
+---
+- hosts: all
+  gather_facts: false
+  remote_user: ansadm
+  tasks:
+
+- ansible.builtin.import_playbook:  repository.yaml
+  vars:
+    state: enable
+
+- ansible.builtin.import_playbook: controlplane.yaml
+  vars:
+    VERSION: "{{ version }}"
+
+- ansible.builtin.import_playbook: workers.yaml
+  vars:
+    VERSION: "{{ version }}"
+
+- ansible.builtin.import_playbook:  repository.yaml
+  vars:
+    state: disable
+
+
+
+### Execute the playbook like this: ansible-playbook -l kubernetes -e version=1.23.1 ~/Documents/Kubernetes/Upgrade/main.yaml

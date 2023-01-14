@@ -1,0 +1,23 @@
+---
+
+- hosts: all
+  become: true
+  become_user: root
+  gather_facts: true
+  tasks:
+
+  - name: Update all Packages on yum based systems
+    yum:
+       name: "*"
+       update_cache: true
+       state: latest
+    when: ansible_distribution in ["OracleLinux", "CentOS"]
+
+
+  - name: Update all Packages on apt based systems
+    apt: 
+       name: "*"
+       update_cache: true
+       state: latest
+    when: ansible_distribution in ["Ubuntu", "Debian"]
+

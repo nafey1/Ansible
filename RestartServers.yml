@@ -1,0 +1,11 @@
+---
+- hosts: all
+  become: true
+  become_user: root
+  gather_facts: false
+  tasks:
+  
+  - name: Restart Servers
+    reboot:
+      msg: "User initiated Server Reboot via Ansible"
+#      reboot_timeout: 300

@@ -1,0 +1,13 @@
+---
+# Requires the plugin community.general
+# Install it as follows:
+#    ansible-galaxy-3 collection install community.general
+- hosts: all
+  become: true
+  become_user: root
+  gather_facts: false
+  tasks:
+
+  - name: Shutdown Servers
+    community.general.shutdown:
+      msg: "User initiated Shutdown via Ansible"

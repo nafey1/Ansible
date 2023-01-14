@@ -1,0 +1,12 @@
+---
+
+- hosts: all
+  become: true
+  become_user: root
+  gather_facts: false
+  tasks:
+
+  - name: Add ssh authorized keys to the target hosts
+    authorized_key:
+      key: "{{ lookup('file', '/home/ansadm/.ssh/id_rsa.pub') }}"
+      user: ansadm

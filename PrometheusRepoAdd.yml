@@ -1,0 +1,32 @@
+---
+
+- hosts: all
+  become: true
+  become_user: root
+  gather_facts: true
+  tasks:
+
+  - name: Add a Prometheus Reporitory to the target hosts
+    tags: prometheus,repository
+    copy:
+       src:  "/etc/yum.repos.d/prometheus.repo"
+       dest: "/etc/yum.repos.d/prometheus.repo"
+    when: ansible_distribution in ["OracleLinux", "CentOS"]
+
+  - name: Install node exporter from the Prometheus Reporitory
+    tags: node_exporter
+    yum:
+      name:
+         - node_exporter
+      state: latest
+      update_cache: true
+    when: ansible_distribution in ["OracleLinux", "CentOS"]
+    register: node_exporter
+
+  - name: Enable and Start the node_exporter service
+    tags: service, enable
+    service:
+      name: node_exporter
+      state: started
+      enabled: true
+    when: ansible_distribution in ["OracleLinux", "CentOS"] and node_exporter.changed

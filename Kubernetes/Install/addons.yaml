@@ -1,0 +1,251 @@
+---
+- hosts: masters
+  gather_facts: false
+  become: true
+  become_user: root
+  tasks:
+
+    - name: Install MetalLB
+      become: true
+      become_user: nafey
+      vars:
+         HOME: /home/nafey
+      shell:
+        cmd: "{{ item }}"
+      loop:
+          - kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.7/config/manifests/metallb-native.yaml
+
+    - name: Download Istio
+      become: true
+      become_user: nafey
+      vars:
+         HOME: /home/nafey
+      shell:
+         cmd: "{{ item }}"
+      loop:
+         - cd {{ HOME }}/Documents/ && curl -L https://istio.io/downloadIstio | sh - |  grep export |  sed 's/^[ \t]*//;s/[ \t]*$//' |  sed 's/\"//g' >> {{ HOME }}/.bash_profile
+      register: istio_path
+
+
+    - name: Install istio
+      become: true
+      become_user: nafey
+      environment:
+         HOME: /home/nafey
+      shell:
+         cmd: "{{ item }}"
+      loop:
+         - source $HOME/.bash_profile && istioctl install --set profile=demo -y
+
+
+    - name: Create a namespace for demo application
+      become: true
+      become_user: root
+      environment:
+         KUBECONFIG: /home/nafey/.kube/config
+      kubernetes.core.k8s:
+         name: bookinfo
+         api_version: v1
+         state: present
+         kind: Namespace
+
+
+    - name: Label the Namespace for istio-injection
+      become: true
+      become_user: nafey
+      environment:
+         KUBECONFIG: /home/nafey/.kube/config
+      ansible.builtin.shell:
+        cmd: kubectl label namespace bookinfo istio-injection=enabled
+
+
+
+    - name: Set the variable for ISTIO_HOME
+      become: true
+      become_user: nafey     
+      ansible.builtin.find:
+         paths: /home/nafey/Documents
+         recurse: no
+         file_type: directory
+      register: ISTIO_DIR
+
+    - debug:
+        msg: "{{ ISTIO_DIR.files[0].path }}"
+
+    - set_fact:
+        ISTIO_HOME: "{{ ISTIO_DIR.files[0].path }}"
+       
+
+    - name: Install sample application / Gateways / Virtual Services / Destination Rules
+      become: true
+      become_user: nafey
+      environment:
+         KUBECONFIG: /home/nafey/.kube/config
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ ISTIO_HOME }}/{{ item }}"
+        namespace: bookinfo
+      loop:
+          - samples/bookinfo/platform/kube/bookinfo.yaml
+          - samples/bookinfo/networking/bookinfo-gateway.yaml
+          - samples/bookinfo/networking/destination-rule-all.yaml
+          - samples/bookinfo/networking/virtual-service-all-v1.yaml
+    
+
+    - name: Install Addons
+      become: true
+      become_user: nafey
+      environment:
+         KUBECONFIG: /home/nafey/.kube/config
+      kubernetes.core.k8s:
+          state: present
+          src: "{{ item }}"
+      loop:
+          - "{{ ISTIO_HOME }}/samples/addons/prometheus.yaml"
+          - "{{ ISTIO_HOME }}/samples/addons/kiali.yaml"
+          - "{{ ISTIO_HOME }}/samples/addons/jaeger.yaml"
+          - "{{ ISTIO_HOME }}/samples/addons/grafana.yaml"
+
+    - name: Install zipkin
+      become: true
+      become_user: nafey
+      environment:
+         KUBECONFIG: /home/nafey/.kube/config
+      ansible.builtin.shell:
+          cmd: kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.16/samples/addons/extras/zipkin.yaml -n istio-system
+
+
+
+
+
+    - name: Install and Patch Metrics Server
+      become: true
+      become_user: nafey
+      environment:
+         KUBECONFIG: /home/nafey/.kube/config
+      ansible.builtin.shell: 
+         cmd: "{{ item }}"
+      loop:
+        - kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+        - "kubectl patch deployment metrics-server -n kube-system --type 'json' -p '[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/args/-\", \"value\": \"--kubelet-insecure-tls\"}]' "
+
+
+
+
+    - name: Pause for 60 seconds for MetalLB to startup
+      ansible.builtin.pause:
+        seconds: 60
+
+
+    - name: Deploy a configmap for MetalLB
+      become: true
+      become_user: nafey
+      environment:
+         KUBECONFIG: /home/nafey/.kube/config
+      kubernetes.core.k8s:
+         state: present
+         definition:
+            apiVersion: metallb.io/v1beta1
+            kind: IPAddressPool
+            metadata:
+              name: cm-load-balancer
+              namespace: metallb-system
+            spec:
+              addresses:
+              - 192.168.1.240-192.168.1.250
+
+
+    - name: Announce The Service IPs
+      become: true
+      become_user: nafey
+      environment:
+         KUBECONFIG: /home/nafey/.kube/config
+      kubernetes.core.k8s:
+         state: present
+         definition:
+            apiVersion: metallb.io/v1beta1
+            kind: L2Advertisement
+            metadata:
+                name: lb-announce
+                namespace: metallb-system
+
+
+
+    - name: Create a Gateway for addons to be accessed via Load Balancer
+      become: true
+      become_user: nafey
+      environment:
+         KUBECONFIG: /home/nafey/.kube/config
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: networking.istio.io/v1beta1
+          kind: Gateway
+          metadata:
+              name: addons-gateway
+              namespace: istio-system
+              labels:
+                components: addons
+          spec:
+              servers:
+                - port:
+                    number: 80
+                    protocol: HTTP
+                    name: http
+                  hosts:
+                    - 'istio.nafey.com'
+              selector:
+                istio: ingressgateway
+
+
+    - name: Create a Virtual Service for Kiali to be accessed via Load Balancer
+      become: true
+      become_user: nafey
+      environment:
+           KUBECONFIG: /home/nafey/.kube/config
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: networking.istio.io/v1beta1
+          kind: VirtualService
+          metadata:
+              name: addons-vs
+              namespace: istio-system
+          spec:
+            hosts:
+                - 'istio.nafey.com'
+            gateways:
+                - addons-gateway
+            http:
+                - match:
+                      - uri:
+                          prefix: /kiali
+                      - uri:
+                          exact: /kiali/console/graph
+                  route:
+                      - destination:
+                          host: kiali.istio-system.svc.cluster.local
+                          port:
+                            number: 20001
+
+
+    - name: Patch the Gateway for the Sample Application Bookinfo
+      become: true
+      become_user: nafey
+      environment:
+           KUBECONFIG: /home/nafey/.kube/config
+      shell:
+         cmd: "kubectl patch gateway bookinfo-gateway -n bookinfo --type 'json' -p '[{\"op\" : \"replace\", \"path\": \"/spec/servers/0/hosts/0\", \"value\": \"bookinfo.nafey.com\"}]' "
+         # (Original Command)  kubectl patch gateway bookinfo-gateway -n bookinfo --type 'json' -p '[{"op": "replace", "path": "/spec/servers/0/hosts/0", "value": "bookinfo.nafey.com"}]'
+
+
+    - name: Enable Autocompletion of kubectl
+      become: true
+      become_user: nafey
+      environment:
+         HOME: /home/nafey
+      shell:
+         cmd: "{{ item }}"
+      loop:
+         - echo "source <(kubectl completion bash)" >> $HOME/.bashrc
+

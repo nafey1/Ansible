@@ -1,0 +1,77 @@
+---
+
+- hosts: masters
+  gather_facts: false
+  become: true
+  become_user: root
+
+  tasks:
+    - name: Pull Controlplane images (execute on master only)
+      become: true
+      become_user: root
+      shell:
+        cmd: kubeadm config images pull
+
+    - name: Setup ControlPlane (execute on master only)
+      shell:
+        cmd: kubeadm init --pod-network-cidr "{{ PodCIDR }}" --apiserver-advertise-address="{{ APIaddress }}"
+      register: execution_status
+    
+    - name: View output
+      debug:
+        msg="{{ execution_status.stdout }}"
+   
+    - name: Modify Profile seetings of user - nafey
+      vars:
+       HOME: /home/nafey
+      shell:
+        cmd: "{{ item }}"
+      loop:
+       - mkdir -p {{HOME}}/.kube
+       - cp -i /etc/kubernetes/admin.conf {{HOME}}/.kube/config
+       - chown nafey:nafey {{HOME}}/.kube/config
+       - echo "unalias -a" >> {{HOME}}/.bash_profile
+
+    
+    - name: Modify profile of user - root
+      become: true
+      become_user: root
+      shell:
+        cmd: "{{ item }}"
+      loop:
+         - echo "export KUBECONFIG=/etc/kubernetes/admin.conf" >> /root/.bash_profile
+         - echo "source <(kubectl completion bash)" >> /root/.bash_profile
+     
+
+    - name: Install Pod Networking Solution (Calico)
+      become: true
+      become_user: root
+      environment:
+         KUBECONFIG: /etc/kubernetes/admin.conf
+      shell:
+        cmd: "{{ item }}"
+      loop:
+          - kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+
+
+    - name: Install python package (for k8s ansible module)
+      ansible.builtin.pip:
+         name: "{{ item }}"
+      loop:
+        - kubernetes
+        - PyYAML
+        - jsonpatch
+
+
+    - name: Install Helm
+      become: true
+      become_user: root
+      environment:
+        PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin"
+      shell:
+         cmd: "{{ item }}"
+      loop:
+        - curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        - chmod 700 get_helm.sh
+        - ./get_helm.sh
+

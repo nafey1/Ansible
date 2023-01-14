@@ -1,0 +1,44 @@
+---
+
+- hosts: all
+  gather_facts: false
+  become: true
+  become_user: root
+
+  tasks:
+    - name: Setup repository for Kubernetes
+      copy:
+       dest: /etc/yum.repos.d/kubernetes.repo
+       content: |
+        [kubernetes]
+        name=Kubernetes
+        baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-$basearch
+        enabled=1
+        gpgcheck=1
+        gpgkey=https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+        exclude=kubelet kubeadm kubectl
+    
+    
+    - name: Install Kubernetes packages
+      vars:
+       version:
+      yum:
+        name: "{{ item }}"
+        state: latest
+        disable_excludes: kubernetes
+      loop:
+        - kubelet-{{ VERSION }}
+        - kubeadm-{{ VERSION }}
+        - kubectl-{{ VERSION }}
+    
+    - name: Start & Enable Kubelet
+      ansible.builtin.systemd:
+        state: started
+        enabled: true
+        name: kubelet
+
+    - name: Disable Repositories of Kubernetes
+      shell:  
+         cmd: yum-config-manager --disable "{{ item }}"
+      loop:
+         - kubernetes

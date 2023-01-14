@@ -1,0 +1,16 @@
+---
+- hosts: all
+  become: true
+  tasks:
+ 
+   - name: Add Elasticsearch Repository
+     copy:
+        src: /home/ansadm/Documents/Configs/kibana.repo
+        dest: /etc/yum.repos.d/
+
+
+   - name: Install Kibana
+     yum:
+       name: 
+         - kibana
+       state: latest

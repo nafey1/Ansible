@@ -1,0 +1,80 @@
+---
+- hosts: workers
+  gather_facts: true
+  become: true
+  become_user: root
+
+  tasks:
+
+    - name: Upgrade Kubeadm package
+      vars:
+       version:
+      yum:
+        name: "{{ item }}"
+        state: latest
+        disable_excludes: kubernetes
+      loop:
+        - kubeadm-{{ VERSION }}
+
+
+    - name: Call "kubeadm upgrade" 
+      shell:
+        cmd: kubeadm upgrade node
+
+
+- name: Drain the Worker nodes
+  hosts: masters
+  become: true
+  become_user: root
+  gather_facts: true
+  tasks:
+   
+    - name: Drain Nodes
+      environment:
+         KUBECONFIG: /etc/kubernetes/admin.conf
+      shell: |
+         {% for host in groups['workers'] %}
+            kubectl drain {{ hostvars[host].ansible_facts.fqdn }} --ignore-daemonsets --delete-emptydir-data
+         {% endfor %}  
+
+
+- name: upgrade kubelet & kubectl
+  hosts: workers
+  become: true
+  become_user: root
+  gather_facts: false
+  tasks:
+
+    - name: Peforming upgrade
+      vars:
+       version:
+      yum:
+        name: "{{ item }}"
+        state: latest
+        disable_excludes: kubernetes
+      loop:
+        - kubectl-{{ VERSION }}
+        - kubelet-{{ VERSION }}
+
+    - name: Restart the kubelet
+      systemd:
+         state: restarted
+         daemon_reload: yes
+         name: kubelet
+
+- name: Uncordon the Worker nodes
+  hosts: masters
+  become: true
+  become_user: root
+  gather_facts: false
+  tasks:
+
+    - name: Drain Nodes
+      environment:
+         KUBECONFIG: /etc/kubernetes/admin.conf
+      shell: |
+         {% for host in groups['workers'] %}
+            kubectl uncordon {{ hostvars[host].ansible_facts.fqdn }}
+         {% endfor %}
+
+

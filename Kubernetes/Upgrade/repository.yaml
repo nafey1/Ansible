@@ -1,0 +1,18 @@
+---
+- hosts: all
+  gather_facts: no
+  become: true
+  become_user: root
+
+  tasks:
+
+    - name: Set Repository State
+      set_fact:
+         repo_state: "{{ state }}"
+    
+    - name: "{{ repo_state }} Kubernetes Repository"
+      shell:
+         cmd: yum-config-manager --"{{repo_state}}" "{{ item }}"
+      loop:
+         - kubernetes
+

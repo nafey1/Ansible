@@ -1,0 +1,45 @@
+---
+
+- hosts: all
+  gather_facts: false
+  become: true
+  become_user: root
+  tasks:
+
+  - name: Configure required modules
+    become: true
+    shell:
+      cmd: "{{ item }}"
+    loop:
+      - modprobe br_netfilter
+      - modprobe overlay
+      - lsmod | grep br_netfilter
+      - lsmod | grep overlay
+      - modprobe iptable_filter
+
+  - name: Create a file to load modules
+    copy:
+      dest: /etc/modules-load.d/containerd.conf
+      content: |
+        overlay
+        br_netfilter
+
+  - name: Configure required sysctl to persist across system reboots
+    ansible.builtin.copy:
+      dest: /etc/sysctl.d/99-kubernetes-cri.conf
+      content: |
+        net.bridge.bridge-nf-call-iptables  = 1
+        net.ipv4.ip_forward                 = 1
+        net.bridge.bridge-nf-call-ip6tables = 1
+
+  - name: Apply systemt rules to load
+    shell:
+      cmd: sysctl --system
+
+
+  - name: Create a file to load iptables modules
+    copy:
+      dest: /etc/modules-load.d/iptables.conf
+      content: |
+         iptable_filter
+

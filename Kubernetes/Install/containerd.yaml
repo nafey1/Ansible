@@ -1,0 +1,55 @@
+---
+
+- hosts: all
+  gather_facts: false
+  become: true
+  become_user: root
+  tasks:
+    - name: Add yum repositories for containerd (from docker repo)
+      get_url:
+        url:  https://download.docker.com/linux/centos/docker-ce.repo
+        dest: /etc/yum.repos.d/docker-ce.repo
+    
+    - name: Uninstall podman & buildah packages
+      yum:
+        name: "{{ packages }}"
+        state: absent
+      vars:
+        packages:
+        - podman
+        - buildah
+    
+    - name: Install the latest version of containerd & git
+      yum:
+        name: "{{ item }}"
+        state: latest
+      loop:
+        - containerd.io
+        - git
+    
+    - name: Touch a containerd configuration file
+      ansible.builtin.file:
+        path: /etc/containerd/config.toml
+        state: touch
+    
+    - name: Create a containerd configuration file
+      shell:
+        cmd: containerd config default | sudo tee /etc/containerd/config.toml
+    
+    - name: Set the cgroup driver for runc to systemd
+      replace:
+        path: /etc/containerd/config.toml
+        regexp: 'SystemdCgroup = false'
+        replace: 'SystemdCgroup = true'
+    
+    - name: Start and Enable containerd
+      ansible.builtin.systemd:
+        state: started
+        enabled: yes
+        name: containerd
+
+    - name:  Write the crictl configuration file for use with Containerd 
+      copy:
+       dest: /etc/crictl.yaml
+       content: |
+         runtime-endpoint: unix:///run/containerd/containerd.sock

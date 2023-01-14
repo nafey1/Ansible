@@ -1,0 +1,14 @@
+---
+- hosts: all
+  become: true
+  tasks:
+ 
+
+   - name: Install Mysql Community Server & mysqld_exporter
+     yum:
+       update_cache: yes
+       disable_gpg_check: yes
+       name: 
+         - mysqld_exporter
+         - https://dev.mysql.com/get/mysql80-community-release-el8-3.noarch.rpm
+       state: latest
